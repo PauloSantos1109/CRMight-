@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Backend (Nest.js)
+  backend:
+    build: ./backend
+    container_name: crm_backend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/crm"
+      RABBITMQ_URL: "amqp://rabbitmq"
+    volumes:
+      - ./backend:/app
+    networks:
+      - crm-network
+
+  # Frontend (Nuxt.js)
+  frontend:
+    build: ./frontend
+    container_name: crm_frontend
+    restart: always
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+    networks:
+      - crm-network
+
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: crm_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: crm_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Porta de administração web
+    networks:
+      - crm-network
+
+  # Nginx
+  nginx:
+    build: ./nginx
+    container_name: crm_nginx
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - crm-network
+
+  # Elastic Stack - Logstash, Elasticsearch, Kibana
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: crm_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    networks:
+      - crm-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    container_name: crm_kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - crm-network
+
+volumes:
+  postgres_data:
+
+networks:
+  crm-network:
+    driver: bridge
